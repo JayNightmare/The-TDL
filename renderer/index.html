@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!--
+  The TDL - Renderer Process UI
+  
+  Fullscreen to-do list interface that locks the user in until
+  all tasks are completed. Uses vanilla JavaScript for simplicity
+  and minimal dependencies.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The TDL - Task Lockdown</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>🔒 The TDL</h1>
+            <p class="subtitle">Complete all tasks to unlock your computer</p>
+        </header>
+
+        <main class="todo-container">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+                <span class="progress-text" id="progressText">0 / 0 completed</span>
+            </div>
+
+            <div class="task-list" id="taskList">
+                <!-- Tasks will be dynamically populated -->
+            </div>
+
+            <div class="task-input-section">
+                <input 
+                    type="text" 
+                    id="newTaskInput" 
+                    placeholder="Add a new task..."
+                    maxlength="200"
+                >
+                <button id="addTaskBtn">Add Task</button>
+            </div>
+        </main>
+
+        <footer class="app-footer">
+            <div class="status" id="statusMessage">
+                Loading tasks...
+            </div>
+            <button id="resetBtn" class="reset-btn">Reset Session</button>
+        </footer>
+    </div>
+
+    <!-- Unlock Modal -->
+    <div class="modal" id="unlockModal">
+        <div class="modal-content">
+            <h2>🎉 All Tasks Completed!</h2>
+            <p>Excellent work! You've completed all your tasks.</p>
+            <p>The application will now close and stop running.</p>
+            <button id="unlockBtn" class="unlock-btn">Close Application</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
