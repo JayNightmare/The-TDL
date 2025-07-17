@@ -209,7 +209,9 @@ if (!gotTheLock) {
     });
 }
 
-// IPC handlers
+// //
+
+// ! IPC handlers
 ipcMain.on("unlock", () => {
     console.log("All tasks completed - processing unlock request");
     isUnlocked = true;
@@ -219,12 +221,12 @@ ipcMain.on("unlock", () => {
     if (settings.quitOnComplete) {
         console.log("Shutting down application - all tasks complete!");
         
-        // Disable auto-launch since tasks are complete for the day
+        // * Disable auto-launch since tasks are complete for the day
         autoLauncher.disable().catch((err) => {
             console.log("Could not disable auto-launch:", err.message);
         });
         
-        // Clean up and quit the application
+        // * Clean up and quit the application
         globalShortcut.unregisterAll();
         app.isQuiting = true;
         
@@ -233,12 +235,12 @@ ipcMain.on("unlock", () => {
             mainWindow = null;
         }
         
-        // Give a brief moment for cleanup, then quit
+        // ? Give a brief moment for cleanup, then quit
         setTimeout(() => {
             app.quit();
         }, 500);
     } else {
-        // Development mode: just hide temporarily for testing
+        // ? Development mode: just hide temporarily for testing
         console.log("Development mode - hiding window temporarily");
         if (mainWindow) {
             mainWindow.hide();
@@ -254,6 +256,8 @@ ipcMain.on("unlock", () => {
         }
     }
 });
+
+// //
 
 ipcMain.on("get-tasks", (event) => {
     let tasks = store.get("tasks", null);
