@@ -30,6 +30,9 @@ module.exports = {
         
         // In dev mode, don't quit completely (for testing)
         quitOnComplete: false,
+
+        // Less aggressive focus monitoring in dev
+        focusMonitoringInterval: 1000,
     },
 
     // Production settings
@@ -42,5 +45,8 @@ module.exports = {
         
         // In production, quit completely when tasks are done
         quitOnComplete: true,
+
+        // Aggressive focus monitoring in production
+        focusMonitoringInterval: 250,
     },
 };

@@ -36,6 +36,7 @@ const autoLauncher = new AutoLaunch({
 
 let mainWindow = null;
 let isUnlocked = false;
+let focusMonitorInterval;
 
 function createWindow() {
     // Get configuration based on environment
@@ -43,21 +44,29 @@ function createWindow() {
 
     // Create kiosk-style fullscreen window
     mainWindow = new BrowserWindow({
-        fullscreen: !config.isDev,
+        width: 1920,
+        height: 1080,
+        fullscreen: true,
         frame: false,
-        alwaysOnTop: !config.isDev,
-        resizable: config.isDev,
-        movable: config.isDev,
-        minimizable: config.isDev,
-        maximizable: config.isDev,
+        titleBarStyle: "hidden",
+        resizable: false,
+        movable: false,
+        minimizable: false,
+        maximizable: false,
         closable: settings.allowClose,
+        alwaysOnTop: true,
         skipTaskbar: false,
-        kiosk: !config.isDev,
+        focusable: true,
+        show: false,
+        kiosk: !settings.allowClose,
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
             enableRemoteModule: false,
             preload: path.join(__dirname, "renderer", "preload.js"),
+            webSecurity: true,
+            allowRunningInsecureContent: false,
+            experimentalFeatures: false,
         },
     });
 
@@ -67,10 +76,50 @@ function createWindow() {
     // Load the app
     mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
 
-    // Open DevTools in development
-    if (config.isDev && settings.openDevTools) {
-        mainWindow.webContents.openDevTools();
-    }
+    // Enhanced window event handlers
+    mainWindow.once("ready-to-show", () => {
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.setAlwaysOnTop(true);
+        
+        // Start focus monitoring
+        startFocusMonitoring();
+        
+        if (settings.openDevTools && settings.allowDevTools) {
+            mainWindow.webContents.openDevTools();
+        }
+    });
+
+    // Prevent window from losing focus
+    mainWindow.on("blur", () => {
+        console.log("Window lost focus - regaining immediately");
+        if (!isUnlocked && mainWindow && !mainWindow.isDestroyed()) {
+            setTimeout(() => {
+                mainWindow.focus();
+                mainWindow.show();
+                mainWindow.moveTop();
+                mainWindow.setAlwaysOnTop(true);
+            }, 50);
+        }
+    });
+
+    // Prevent minimize
+    mainWindow.on("minimize", (event) => {
+        if (!isUnlocked) {
+            event.preventDefault();
+            mainWindow.restore();
+            mainWindow.focus();
+        }
+    });
+
+    // Prevent hide
+    mainWindow.on("hide", (event) => {
+        if (!isUnlocked) {
+            event.preventDefault();
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
 
     // Prevent window from being closed
     mainWindow.on("close", (event) => {
@@ -82,15 +131,17 @@ function createWindow() {
 
     // Respawn window if it's destroyed unexpectedly
     mainWindow.on("closed", () => {
-        if (!isUnlocked) {
+        console.log("Main window closed unexpectedly");
+        if (!isUnlocked && !app.isQuiting) {
+            console.log("Respawning window - lockdown still active");
             setTimeout(() => {
                 createWindow();
-            }, 1000);
+            }, 100);
         }
         mainWindow = null;
     });
 
-    // Block developer tools and other escape routes
+    // Enhanced input blocking
     mainWindow.webContents.on("before-input-event", (event, input) => {
         const settings = config.isDev ? config.dev : config.prod;
 
@@ -99,15 +150,17 @@ function createWindow() {
             return;
         }
 
-        // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, etc.
+        // Block developer tools and debugging
         if (
             input.key === "F12" ||
-            (input.control &&
-                input.shift &&
-                (input.key === "I" || input.key === "J")) ||
-            (input.control && input.shift && input.key === "C")
+            (input.control && input.shift && (input.key === "I" || input.key === "J")) ||
+            (input.control && input.shift && input.key === "C") ||
+            (input.control && input.key === "u") ||
+            (input.alt && input.key === "F4") ||
+            (input.control && input.key === "w")
         ) {
             event.preventDefault();
+            console.log(`Blocked input: ${input.key}`);
         }
     });
 
@@ -115,12 +168,55 @@ function createWindow() {
     mainWindow.webContents.setWindowOpenHandler(() => {
         return { action: "deny" };
     });
+
+    // Block navigation attempts
+    mainWindow.webContents.on("will-navigate", (event, navigationUrl) => {
+        event.preventDefault();
+        console.log("Navigation blocked:", navigationUrl);
+    });
+}
+
+// Add focus monitoring system
+function startFocusMonitoring() {
+    if (focusMonitorInterval) {
+        clearInterval(focusMonitorInterval);
+    }
+    
+    const settings = config.isDev ? config.dev : config.prod;
+    const interval = settings.focusMonitoringInterval || 250;
+    
+    focusMonitorInterval = setInterval(() => {
+        if (!isUnlocked && mainWindow && !mainWindow.isDestroyed()) {
+            // Check if our window is focused
+            if (!mainWindow.isFocused()) {
+                console.log("Window not focused - forcing focus");
+                mainWindow.focus();
+                mainWindow.show();
+                mainWindow.moveTop();
+                mainWindow.setAlwaysOnTop(true);
+                
+                // Flash the window to get attention
+                mainWindow.flashFrame(true);
+                setTimeout(() => {
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.flashFrame(false);
+                    }
+                }, 1000);
+            }
+        }
+    }, interval);
+}
+
+function stopFocusMonitoring() {
+    if (focusMonitorInterval) {
+        clearInterval(focusMonitorInterval);
+        focusMonitorInterval = null;
+    }
 }
 
 function registerGlobalShortcuts() {
     // Block common system shortcuts
     const shortcuts = [
-        "Alt+F4", // Windows close
         "Cmd+Q", // Mac quit
         "Ctrl+W", // Close tab/window
         "Ctrl+Alt+Delete", // Task manager (limited effectiveness)
@@ -131,12 +227,41 @@ function registerGlobalShortcuts() {
         "Cmd+H", // Mac hide
         "F11", // Toggle fullscreen
         "Escape", // General escape
+        "Windows", // Windows key
+        "Cmd+Space", // Mac Spotlight
+        "Ctrl+Escape", // Start menu
+        "Alt+Escape", // Switch between windows
+        "Ctrl+Alt+Tab", // Persistent task switcher
+        "Cmd+Option+Esc", // Mac force quit
+        "Cmd+`", // Mac app window switcher
+        "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F12", // Function keys
+        "Ctrl+Shift+T", // Reopen closed tab
+        "Ctrl+N", // New window
+        "Ctrl+T", // New tab
+        "Ctrl+L", // Address bar
+        "Ctrl+D", // Bookmark
+        "Ctrl+H", // History
+        "Ctrl+J", // Downloads
+        "Ctrl+U", // View source
+        "Ctrl+Shift+I", // Developer tools
+        "Ctrl+Shift+J", // Console
+        "Ctrl+Shift+C", // Inspect element
+        "Alt+Space", // Window menu
+        "Ctrl+Alt+L", // Lock screen
+        "Cmd+Ctrl+Q", // Mac lock screen
     ];
 
     shortcuts.forEach((shortcut) => {
         try {
             globalShortcut.register(shortcut, () => {
-                // Prevent default action by doing nothing
+                console.log(`Blocked shortcut: ${shortcut}`);
+                // Bring window back to focus aggressively
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.focus();
+                    mainWindow.show();
+                    mainWindow.moveTop();
+                    mainWindow.setAlwaysOnTop(true);
+                }
                 return false;
             });
         } catch (error) {
@@ -216,6 +341,9 @@ ipcMain.on("unlock", () => {
     console.log("All tasks completed - processing unlock request");
     isUnlocked = true;
     
+    // Stop focus monitoring
+    stopFocusMonitoring();
+    
     const settings = config.isDev ? config.dev : config.prod;
     
     if (settings.quitOnComplete) {
@@ -247,6 +375,7 @@ ipcMain.on("unlock", () => {
             
             setTimeout(() => {
                 isUnlocked = false;
+                startFocusMonitoring(); // Restart monitoring
                 if (mainWindow) {
                     mainWindow.show();
                 } else {
@@ -296,5 +425,6 @@ ipcMain.on("reset-session", () => {
 
 // Clean up shortcuts on quit
 app.on("will-quit", () => {
+    stopFocusMonitoring();
     globalShortcut.unregisterAll();
 });
