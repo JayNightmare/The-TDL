@@ -20,7 +20,7 @@
     "focus",
     "lockdown"
   ],
-  "author": "Your Name",
+  "author": "Jay",
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.0.0",
@@ -31,14 +31,15 @@
     "electron-store": "^8.1.0"
   },
   "build": {
-    "appId": "com.yourcompany.the-tdl",
+    "appId": "com.tdl.the-tdl",
     "productName": "The TDL",
     "directories": {
       "output": "dist"
     },
     "files": [
       "main.js",
-      "renderer/**/*",
+      "config.js",
+      "renderer/*",
       "tasks.json",
       "node_modules/**/*"
     ],
